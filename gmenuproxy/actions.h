@@ -10,8 +10,7 @@
 #include <QString>
 
 #include "gdbusmenutypes_p.h"
-
-class QStringList;
+#include <QStringList>
 
 class Actions : public QObject
 {

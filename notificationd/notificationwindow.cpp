@@ -25,6 +25,11 @@
 
 #include <KWindowSystem>
 #include <KWindowEffects>
+#include <QGuiApplication>
+#ifdef Q_OS_LINUX
+#  include <KX11Extras>
+#  include <netwm_def.h>
+#endif
 
 NotificationWindow::NotificationWindow(QQuickView *parent)
     : QQuickView(parent)
@@ -65,7 +70,10 @@ bool NotificationWindow::eventFilter(QObject *object, QEvent *event)
             QQuickView::setVisible(false);
         }
     } else if (event->type() == QEvent::Show) {
-        KWindowSystem::setState(winId(), NET::SkipTaskbar | NET::SkipPager | NET::SkipSwitcher);
+#ifdef Q_OS_LINUX
+        if (QGuiApplication::platformName() == QLatin1String("xcb"))
+            KX11Extras::setState(winId(), NET::SkipTaskbar | NET::SkipPager | NET::SkipSwitcher);
+#endif
         HistoryModel::self()->updateTime();
     } else if (event->type() == QEvent::Hide) {
         setMouseGrabEnabled(false);

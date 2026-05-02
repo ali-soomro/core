@@ -1,6 +1,4 @@
-find_package(Qt5 COMPONENTS Core Widgets DBus X11Extras REQUIRED)
-find_package(XCB MODULE REQUIRED COMPONENTS XCB KEYSYMS)
-find_package(X11)
+find_package(KF6GlobalAccel REQUIRED)
 
 set(PROJECT_SOURCES
     main.cpp
@@ -8,19 +6,13 @@ set(PROJECT_SOURCES
     hotkeys.cpp
 )
 
-add_executable(chotkeys
-    ${PROJECT_SOURCES}
-)
-
+add_executable(chotkeys ${PROJECT_SOURCES})
 target_link_libraries(chotkeys
     PRIVATE
-    Qt5::Core
-    Qt5::Widgets
-    Qt5::DBus
-    Qt5::X11Extras
-    ${XCB_LIBS}
-    ${X11_LIBRARIES}
-    XCB::KEYSYMS
+    Qt6::Core
+    Qt6::Widgets
+    Qt6::DBus
+    KF6::GlobalAccel
 )
 
 install(TARGETS chotkeys RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

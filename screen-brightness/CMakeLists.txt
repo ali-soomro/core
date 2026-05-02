@@ -1,20 +1,16 @@
 project(cutefish-screen-brightness)
 set(PROJECT_NAME cutefish-screen-brightness)
 
-set(SRCS
+add_executable(${PROJECT_NAME}
     main.cpp
     brightnesshelper.h
     brightnesshelper.cpp
 )
 
-add_executable(${PROJECT_NAME}
-    ${SRCS}
-)
-
 target_link_libraries(${PROJECT_NAME}
-        Qt5::Core
-        Qt5::Gui
-        Qt5::Widgets
+        Qt6::Core
+        Qt6::Gui
+        Qt6::Widgets
 )
 
 configure_file(
@@ -24,4 +20,5 @@ configure_file(
 )
 
 install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/com.cutefish.brightness.pkexec.policy DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/polkit-1/actions/)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/com.cutefish.brightness.pkexec.policy
+        DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/polkit-1/actions/)

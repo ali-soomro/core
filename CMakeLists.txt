@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.16)
 project(core)
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
@@ -11,12 +11,11 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake;${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
-set(QT Core Gui Widgets Quick QuickControls2 DBus Xml X11Extras LinguistTools)
-find_package(Qt5 REQUIRED ${QT})
-# find_package(FishUI REQUIRED)
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Quick QuickControls2 DBus Xml LinguistTools)
 find_package(PkgConfig REQUIRED)
-
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH})
+find_package(KF6WindowSystem REQUIRED)
+find_package(KF6GlobalAccel REQUIRED)
+find_package(KF6CoreAddons REQUIRED)
 
 include(GNUInstallDirs)
 
@@ -25,7 +24,7 @@ add_subdirectory(screen-brightness)
 add_subdirectory(session)
 add_subdirectory(settings-daemon)
 add_subdirectory(shutdown-ui)
-add_subdirectory(xembed-sni-proxy)
+# xembed-sni-proxy is X11/XEmbed only — not needed on Wayland (apps use StatusNotifierItem directly)
 add_subdirectory(powerman)
 add_subdirectory(cpufreq)
 add_subdirectory(chotkeys)

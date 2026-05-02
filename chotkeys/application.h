@@ -35,7 +35,6 @@ private:
 
 private slots:
     void onPressed(QKeySequence keySeq);
-    void onReleased(QKeySequence keySeq);
 
 private:
     Hotkeys *m_hotKeys;

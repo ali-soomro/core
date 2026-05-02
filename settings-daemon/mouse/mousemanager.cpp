@@ -20,65 +20,80 @@
 #include "mousemanager.h"
 #include "mouseadaptor.h"
 
+#include <QDBusConnection>
+#include <QDBusInterface>
+#include <QSettings>
+#include <QStandardPaths>
+
 Mouse::Mouse(QObject *parent)
     : QObject(parent)
-    , m_inputDummydevice(new X11LibinputDummyDevice(this, QX11Info::display()))
 {
-    // init dbus
     new MouseAdaptor(this);
     QDBusConnection::sessionBus().registerObject(QStringLiteral("/Mouse"), this);
 
-    connect(m_inputDummydevice, &X11LibinputDummyDevice::leftHandedChanged, this, &Mouse::leftHandedChanged);
-    connect(m_inputDummydevice, &X11LibinputDummyDevice::pointerAccelerationProfileChanged, this, &Mouse::accelerationChanged);
-    connect(m_inputDummydevice, &X11LibinputDummyDevice::naturalScrollChanged, this, &Mouse::naturalScrollChanged);
-    connect(m_inputDummydevice, &X11LibinputDummyDevice::pointerAccelerationChanged, this, &Mouse::pointerAccelerationChanged);
+    // Load persisted settings.
+    QSettings cfg(QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation)
+                      + QStringLiteral("/kcminputrc"),
+                  QSettings::IniFormat);
+    cfg.beginGroup(QStringLiteral("Mouse"));
+    m_leftHanded        = cfg.value(QStringLiteral("LeftHanded"),        false).toBool();
+    m_acceleration      = cfg.value(QStringLiteral("AccelerationFlat"),  false).toBool();
+    m_naturalScroll     = cfg.value(QStringLiteral("NaturalScroll"),     false).toBool();
+    m_pointerAcceleration = cfg.value(QStringLiteral("PointerAcceleration"), 0.0).toReal();
 }
 
-Mouse::~Mouse()
-{
-    delete m_inputDummydevice;
-}
-
-bool Mouse::leftHanded() const
-{
-    return m_inputDummydevice->isLeftHanded();
-}
-
+bool Mouse::leftHanded() const { return m_leftHanded; }
 void Mouse::setLeftHanded(bool enabled)
 {
-    m_inputDummydevice->setLeftHanded(enabled);
-    m_inputDummydevice->applyConfig();
+    if (m_leftHanded == enabled) return;
+    m_leftHanded = enabled;
+    applyConfig();
+    emit leftHandedChanged();
 }
 
-bool Mouse::acceleration() const
-{
-    return m_inputDummydevice->pointerAccelerationProfileFlat();
-}
-
+bool Mouse::acceleration() const { return m_acceleration; }
 void Mouse::setAcceleration(bool enabled)
 {
-    m_inputDummydevice->setPointerAccelerationProfileFlat(enabled);
-    m_inputDummydevice->applyConfig();
+    if (m_acceleration == enabled) return;
+    m_acceleration = enabled;
+    applyConfig();
+    emit accelerationChanged();
 }
 
-bool Mouse::naturalScroll() const
-{
-    return m_inputDummydevice->isNaturalScroll();
-}
-
+bool Mouse::naturalScroll() const { return m_naturalScroll; }
 void Mouse::setNaturalScroll(bool enabled)
 {
-    m_inputDummydevice->setNaturalScroll(enabled);
-    m_inputDummydevice->applyConfig();
+    if (m_naturalScroll == enabled) return;
+    m_naturalScroll = enabled;
+    applyConfig();
+    emit naturalScrollChanged();
 }
 
-qreal Mouse::pointerAcceleration() const
-{
-    return m_inputDummydevice->pointerAcceleration();
-}
-
+qreal Mouse::pointerAcceleration() const { return m_pointerAcceleration; }
 void Mouse::setPointerAcceleration(qreal value)
 {
-    m_inputDummydevice->setPointerAcceleration(value);
-    m_inputDummydevice->applyConfig();
+    if (qFuzzyCompare(m_pointerAcceleration, value)) return;
+    m_pointerAcceleration = value;
+    applyConfig();
+    emit pointerAccelerationChanged();
+}
+
+void Mouse::applyConfig()
+{
+    QSettings cfg(QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation)
+                      + QStringLiteral("/kcminputrc"),
+                  QSettings::IniFormat);
+    cfg.beginGroup(QStringLiteral("Mouse"));
+    cfg.setValue(QStringLiteral("LeftHanded"),           m_leftHanded);
+    cfg.setValue(QStringLiteral("AccelerationFlat"),     m_acceleration);
+    cfg.setValue(QStringLiteral("NaturalScroll"),        m_naturalScroll);
+    cfg.setValue(QStringLiteral("PointerAcceleration"),  m_pointerAcceleration);
+    cfg.sync();
+
+    QDBusInterface kwin(QStringLiteral("org.kde.KWin"),
+                        QStringLiteral("/KWin"),
+                        QStringLiteral("org.kde.KWin"),
+                        QDBusConnection::sessionBus());
+    if (kwin.isValid())
+        kwin.asyncCall(QStringLiteral("reconfigureInput"));
 }

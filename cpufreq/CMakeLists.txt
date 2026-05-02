@@ -1,16 +1,11 @@
 project(cutefish-cpufreq)
 set(TARGET cutefish-cpufreq)
 
-set(SOURCES
-    main.cpp
-)
-
-add_executable(${TARGET} ${SOURCES} ${DBUS_SOURCES})
+add_executable(${TARGET} main.cpp)
 target_link_libraries(${TARGET}
-        Qt5::Core
-        Qt5::Quick
-        Qt5::DBus
-        Qt5::X11Extras
+        Qt6::Core
+        Qt6::Quick
+        Qt6::DBus
 )
 
 configure_file(
@@ -20,4 +15,5 @@ configure_file(
 )
 
 install(TARGETS ${TARGET} DESTINATION ${CMAKE_INSTALL_BINDIR})
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/com.cutefish.cpufreq.pkexec.policy DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/polkit-1/actions/)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/com.cutefish.cpufreq.pkexec.policy
+        DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/polkit-1/actions/)

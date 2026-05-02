@@ -2,7 +2,6 @@
 #define TOUCHPADMANAGER_H
 
 #include <QObject>
-#include "x11/xlibbackend.h"
 
 class TouchpadManager : public QObject
 {
@@ -31,7 +30,13 @@ public:
     void setPointerAcceleration(qreal value);
 
 private:
-    XlibBackend *m_backend;
+    void applyConfig();
+
+    bool m_available = false;
+    bool m_enabled = true;
+    bool m_tapToClick = false;
+    bool m_naturalScroll = false;
+    qreal m_pointerAcceleration = 0.0;
 };
 
 #endif // TOUCHPADMANAGER_H

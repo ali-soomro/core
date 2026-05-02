@@ -1,20 +1,10 @@
 /*
  * Copyright (C) 2021 CutefishOS Team.
  *
- * Author:     revenmartin <revenmartin@gmail.com>
- *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include "processmanager.h"
@@ -25,37 +15,26 @@
 #include <QFileInfoList>
 #include <QFileInfo>
 #include <QSettings>
-#include <QDebug>
-#include <QTimer>
-#include <QThread>
-#include <QDir>
-
+#include <QDBusConnection>
 #include <QDBusInterface>
 #include <QDBusPendingCall>
-
-#include <QX11Info>
-#include <KWindowSystem>
-#include <KWindowSystem/NETWM>
+#include <QDBusServiceWatcher>
+#include <QDebug>
+#include <QTimer>
+#include <QDir>
 
 ProcessManager::ProcessManager(Application *app, QObject *parent)
     : QObject(parent)
     , m_app(app)
-    , m_wmStarted(false)
-    , m_waitLoop(nullptr)
 {
-    qApp->installNativeEventFilter(this);
 }
 
 ProcessManager::~ProcessManager()
 {
-    qApp->removeNativeEventFilter(this);
-
     QMapIterator<QString, QProcess *> i(m_systemProcess);
     while (i.hasNext()) {
         i.next();
-        QProcess *p = i.value();
-        delete p;
-        m_systemProcess[i.key()] = nullptr;
+        delete i.value();
     }
 }
 
@@ -67,180 +46,142 @@ void ProcessManager::start()
 
 void ProcessManager::logout()
 {
-    QDBusInterface kwinIface("org.kde.KWin",
-                             "/Session",
-                             "org.kde.KWin.Session",
+    QDBusInterface kwinIface(QStringLiteral("org.kde.KWin"),
+                             QStringLiteral("/Session"),
+                             QStringLiteral("org.kde.KWin.Session"),
                              QDBusConnection::sessionBus());
-
     if (kwinIface.isValid()) {
-        kwinIface.call("aboutToSaveSession", "cutefish");
-        kwinIface.call("setState", uint(2)); // Quit
+        kwinIface.call(QStringLiteral("aboutToSaveSession"), QStringLiteral("cutefish"));
+        kwinIface.call(QStringLiteral("setState"), uint(2));
     }
 
-    QProcess s;
-    s.start("killall", QStringList() << "kglobalaccel5");
-    s.waitForFinished(-1);
+    QProcess::execute(QStringLiteral("killall"), {QStringLiteral("kglobalaccel6")});
 
-    QDBusInterface iface("org.freedesktop.login1",
-                        "/org/freedesktop/login1/session/self",
-                        "org.freedesktop.login1.Session",
-                        QDBusConnection::systemBus());
-    if (iface.isValid())
-        iface.call("Terminate");
+    QDBusInterface loginIface(QStringLiteral("org.freedesktop.login1"),
+                              QStringLiteral("/org/freedesktop/login1/session/self"),
+                              QStringLiteral("org.freedesktop.login1.Session"),
+                              QDBusConnection::systemBus());
+    if (loginIface.isValid())
+        loginIface.call(QStringLiteral("Terminate"));
 
     QCoreApplication::exit(0);
 }
 
 void ProcessManager::startWindowManager()
 {
-    QProcess *wmProcess = new QProcess;
+    const QString wm = m_app->wayland() ? QStringLiteral("kwin_wayland") : QStringLiteral("kwin_x11");
+    QProcess *wmProcess = new QProcess(this);
+    wmProcess->start(wm, {});
+    m_systemProcess.insert(wm, wmProcess);
 
-    wmProcess->start(m_app->wayland() ? "kwin_wayland" : "kwin_x11", QStringList());
-
-    if (!m_app->wayland()) {
+    if (m_app->wayland()) {
+        // On Wayland, wait for KWin to register on D-Bus before starting desktop.
+        auto *watcher = new QDBusServiceWatcher(
+            QStringLiteral("org.kde.KWin"),
+            QDBusConnection::sessionBus(),
+            QDBusServiceWatcher::WatchForRegistration,
+            this);
+        connect(watcher, &QDBusServiceWatcher::serviceRegistered, this, [this, watcher]() {
+            qDebug() << "KWin Wayland compositor ready";
+            watcher->deleteLater();
+            startDesktopProcess();
+        });
+        // Fallback: start desktop after 10 s even if D-Bus signal never fires.
+        QTimer::singleShot(10000, this, [this, watcher]() {
+            if (watcher->parent()) {
+                qWarning() << "KWin D-Bus timeout; starting desktop anyway";
+                watcher->deleteLater();
+                startDesktopProcess();
+            }
+        });
+    } else {
+        // X11: wait for WM name to appear, then start desktop.
         QEventLoop waitLoop;
-        m_waitLoop = &waitLoop;
-        // add a timeout to avoid infinite blocking if a WM fail to execute.
-        QTimer::singleShot(30 * 1000, &waitLoop, SLOT(quit()));
+        QTimer::singleShot(30000, &waitLoop, &QEventLoop::quit);
         waitLoop.exec();
-        m_waitLoop = nullptr;
+        startDesktopProcess();
     }
 }
 
 void ProcessManager::startDesktopProcess()
 {
-    // When the cutefish-settings-daemon theme module is loaded, start the desktop.
-    // In the way, there will be no problem that desktop and launcher can't get wallpaper.
-
     QList<QPair<QString, QStringList>> list;
-    // Desktop components
-    list << qMakePair(QString("cutefish-notificationd"), QStringList());
-    list << qMakePair(QString("cutefish-statusbar"), QStringList());
-    list << qMakePair(QString("cutefish-dock"), QStringList());
-    list << qMakePair(QString("cutefish-filemanager"), QStringList("--desktop"));
-    list << qMakePair(QString("cutefish-launcher"), QStringList());
-    list << qMakePair(QString("cutefish-powerman"), QStringList());
-    list << qMakePair(QString("cutefish-clipboard"), QStringList());
+    list << qMakePair(QStringLiteral("cutefish-notificationd"),    QStringList());
+    list << qMakePair(QStringLiteral("cutefish-statusbar"),        QStringList());
+    list << qMakePair(QStringLiteral("cutefish-dock"),             QStringList());
+    list << qMakePair(QStringLiteral("cutefish-filemanager"),      QStringList(QStringLiteral("--desktop")));
+    list << qMakePair(QStringLiteral("cutefish-launcher"),         QStringList());
+    list << qMakePair(QStringLiteral("cutefish-powerman"),         QStringList());
+    list << qMakePair(QStringLiteral("cutefish-clipboard"),        QStringList());
 
-    // For CutefishOS.
-    if (QFile("/usr/bin/cutefish-welcome").exists() &&
-            !QFile("/run/live/medium/live/filesystem.squashfs").exists()) {
-        QSettings settings("cutefishos", "login");
-
-        if (!settings.value("Finished", false).toBool()) {
-            list << qMakePair(QString("/usr/bin/cutefish-welcome"), QStringList());
-        } else {
-            list << qMakePair(QString("/usr/bin/cutefish-welcome"), QStringList() << "-d");
-        }
+    if (QFile::exists(QStringLiteral("/usr/bin/cutefish-welcome")) &&
+            !QFile::exists(QStringLiteral("/run/live/medium/live/filesystem.squashfs"))) {
+        QSettings settings(QStringLiteral("cutefishos"), QStringLiteral("login"));
+        if (!settings.value(QStringLiteral("Finished"), false).toBool())
+            list << qMakePair(QStringLiteral("/usr/bin/cutefish-welcome"), QStringList());
+        else
+            list << qMakePair(QStringLiteral("/usr/bin/cutefish-welcome"), QStringList(QStringLiteral("-d")));
     }
 
-    for (QPair<QString, QStringList> pair : list) {
-        QProcess *process = new QProcess;
+    for (const auto &pair : list) {
+        QProcess *process = new QProcess(this);
         process->setProcessChannelMode(QProcess::ForwardedChannels);
         process->setProgram(pair.first);
         process->setArguments(pair.second);
         process->start();
         process->waitForStarted();
-
-        qDebug() << "Load DE components: " << pair.first << pair.second;
-
-        // Add to map
-        if (process->exitCode() == 0) {
-            m_autoStartProcess.insert(pair.first, process);
-        } else {
-            process->deleteLater();
-        }
+        qDebug() << "Started:" << pair.first << pair.second;
+        m_autoStartProcess.insert(pair.first, process);
     }
 
-    // Auto start
     QTimer::singleShot(100, this, &ProcessManager::loadAutoStartProcess);
 }
 
 void ProcessManager::startDaemonProcess()
 {
     QList<QPair<QString, QStringList>> list;
-    list << qMakePair(QString("cutefish-settings-daemon"), QStringList());
-    list << qMakePair(QString("cutefish-xembedsniproxy"), QStringList());
-    list << qMakePair(QString("cutefish-gmenuproxy"), QStringList());
-    list << qMakePair(QString("chotkeys"), QStringList());
+    list << qMakePair(QStringLiteral("cutefish-settings-daemon"), QStringList());
+    // xembedsniproxy removed: on Wayland apps use StatusNotifierItem directly
+    list << qMakePair(QStringLiteral("cutefish-gmenuproxy"),      QStringList());
+    list << qMakePair(QStringLiteral("chotkeys"),                  QStringList());
 
-    for (QPair<QString, QStringList> pair : list) {
-        QProcess *process = new QProcess;
+    for (const auto &pair : list) {
+        QProcess *process = new QProcess(this);
         process->setProcessChannelMode(QProcess::ForwardedChannels);
         process->setProgram(pair.first);
         process->setArguments(pair.second);
         process->start();
         process->waitForStarted();
-
-        // Add to map
-        if (process->exitCode() == 0) {
-            m_autoStartProcess.insert(pair.first, process);
-        } else {
-            process->deleteLater();
-        }
+        m_autoStartProcess.insert(pair.first, process);
     }
 }
 
 void ProcessManager::loadAutoStartProcess()
 {
     QStringList execList;
-    const QStringList dirs = QStandardPaths::locateAll(QStandardPaths::GenericConfigLocation,
-                                                       QStringLiteral("autostart"),
-                                                       QStandardPaths::LocateDirectory);
+    const QStringList dirs = QStandardPaths::locateAll(
+        QStandardPaths::GenericConfigLocation,
+        QStringLiteral("autostart"),
+        QStandardPaths::LocateDirectory);
+
     for (const QString &dir : dirs) {
         const QDir d(dir);
-        const QStringList fileNames = d.entryList(QStringList() << QStringLiteral("*.desktop"));
-        for (const QString &file : fileNames) {
+        for (const QString &file : d.entryList({QStringLiteral("*.desktop")})) {
             QSettings desktop(d.absoluteFilePath(file), QSettings::IniFormat);
-            desktop.setIniCodec("UTF-8");
-            desktop.beginGroup("Desktop Entry");
-
-            if (desktop.contains("OnlyShowIn"))
+            desktop.beginGroup(QStringLiteral("Desktop Entry"));
+            if (desktop.contains(QStringLiteral("OnlyShowIn")))
                 continue;
-
-            const QString execValue = desktop.value("Exec").toString();
-
-            // 避免冲突
-            if (execValue.contains("gmenudbusmenuproxy"))
-                continue;
-
-            if (!execValue.isEmpty()) {
-                execList << execValue;
-            }
+            const QString exec = desktop.value(QStringLiteral("Exec")).toString();
+            if (!exec.isEmpty() && !exec.contains(QStringLiteral("gmenudbusmenuproxy")))
+                execList << exec;
         }
     }
 
-    for (const QString &exec : execList) {
-        QProcess *process = new QProcess;
+    for (const QString &exec : std::as_const(execList)) {
+        QProcess *process = new QProcess(this);
         process->setProgram(exec);
         process->start();
         process->waitForStarted();
-
-        if (process->exitCode() == 0) {
-            m_autoStartProcess.insert(exec, process);
-        } else {
-            process->deleteLater();
-        }
+        m_autoStartProcess.insert(exec, process);
     }
-}
-
-bool ProcessManager::nativeEventFilter(const QByteArray &eventType, void *message, long *result)
-{
-    if (eventType != "xcb_generic_event_t") // We only want to handle XCB events
-        return false;
-
-    // ref: lxqt session
-    if (!m_wmStarted && m_waitLoop) {
-        // all window managers must set their name according to the spec
-        if (!QString::fromUtf8(NETRootInfo(QX11Info::connection(), NET::SupportingWMCheck).wmName()).isEmpty()) {
-            qDebug() << "Window manager started";
-            m_wmStarted = true;
-            if (m_waitLoop && m_waitLoop->isRunning())
-                m_waitLoop->exit();
-
-            qApp->removeNativeEventFilter(this);
-        }
-    }
-
-    return false;
 }

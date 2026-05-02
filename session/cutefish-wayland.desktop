@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Exec=cutefish-session --wayland
+TryExec=cutefish-session
+Name=Cutefish Desktop
+Keywords=session;wayland
+Comment=Cutefish Wayland session
+DesktopNames=Cutefish
