@@ -68,6 +68,7 @@ cmake -B build -DCMAKE_INSTALL_PREFIX=/usr && cmake --build build && sudo cmake 
 ## Session Files
 - `cutefish-wayland.desktop` → `/usr/share/wayland-sessions/` (`Exec=cutefish-session --wayland`, `DesktopNames=Cutefish`)
 - `cutefish-xsession.desktop` → `/usr/share/xsessions/`
+- Session files use full paths and include `X-GDM-SessionRegisters=true` for GDM session selection
 
 ## Qt5→Qt6 Migration Notes
 - Qt5 → Qt6, KF5 → KF6 across all sub-components
