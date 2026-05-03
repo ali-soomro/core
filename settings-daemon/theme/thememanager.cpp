@@ -26,6 +26,7 @@
 #include <QProcess>
 #include <QFile>
 #include <QDebug>
+#include <QGuiApplication>
 
 static const QByteArray s_systemFontName = QByteArrayLiteral("Font");
 static const QByteArray s_systemFixedFontName = QByteArrayLiteral("FixedFont");
@@ -352,6 +353,10 @@ void ThemeManager::updateGtk3Config()
 
 void ThemeManager::applyXResources()
 {
+    // Skip on Wayland - X resources don't apply
+    if (QGuiApplication::platformName() == QLatin1String("wayland"))
+        return;
+
     m_settings->sync();
 
     qreal scaleFactor = this->devicePixelRatio();

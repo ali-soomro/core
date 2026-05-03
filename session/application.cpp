@@ -265,35 +265,37 @@ void Application::initXResource()
     int fontDpi = 96 * scaleFactor;
     QString cursorTheme = settings.value("CursorTheme", "default").toString();
     int cursorSize = settings.value("CursorSize", 24).toInt() * scaleFactor;
-    int xftAntialias = settings.value("XftAntialias", 1).toBool();
-    QString xftHintStyle = settings.value("XftHintStyle", "hintslight").toString();
 
-    const QString datas = QString("Xft.dpi: %1\n"
-                                  "Xcursor.theme: %2\n"
-                                  "Xcursor.size: %3\n"
-                                  "Xft.antialias: %4\n"
-                                  "Xft.hintstyle: %5\n"
-                                  "Xft.rgba: rgb")
-                          .arg(fontDpi)
-                          .arg(cursorTheme)
-                          .arg(cursorSize)
-                          .arg(xftAntialias)
-                          .arg(xftHintStyle);
-
-    QProcess p;
-    p.start(QStringLiteral("xrdb"), {QStringLiteral("-quiet"), QStringLiteral("-merge"), QStringLiteral("-nocpp")});
-    p.setProcessChannelMode(QProcess::ForwardedChannels);
-    p.write(datas.toLatin1());
-    p.closeWriteChannel();
-    p.waitForFinished(-1);
-
-    // For cutefish-wine
+    // For cutefish-wine (useful on both X11 and Wayland)
     qputenv("CUTEFISH_FONT_DPI", QByteArray::number(fontDpi));
 
-    // Init cursor
-    runSync("cupdatecursor", {cursorTheme, QString::number(cursorSize)});
-    // qputenv("XCURSOR_THEME", cursorTheme.toLatin1());
-    // qputenv("XCURSOR_SIZE", QByteArray::number(cursorSize * scaleFactor));
+    // X11-specific: set X resources and cursor theme via xrdb
+    if (!m_wayland) {
+        int xftAntialias = settings.value("XftAntialias", 1).toBool();
+        QString xftHintStyle = settings.value("XftHintStyle", "hintslight").toString();
+
+        const QString datas = QString("Xft.dpi: %1\n"
+                                      "Xcursor.theme: %2\n"
+                                      "Xcursor.size: %3\n"
+                                      "Xft.antialias: %4\n"
+                                      "Xft.hintstyle: %5\n"
+                                      "Xft.rgba: rgb")
+                              .arg(fontDpi)
+                              .arg(cursorTheme)
+                              .arg(cursorSize)
+                              .arg(xftAntialias)
+                              .arg(xftHintStyle);
+
+        QProcess p;
+        p.start(QStringLiteral("xrdb"), {QStringLiteral("-quiet"), QStringLiteral("-merge"), QStringLiteral("-nocpp")});
+        p.setProcessChannelMode(QProcess::ForwardedChannels);
+        p.write(datas.toLatin1());
+        p.closeWriteChannel();
+        p.waitForFinished(-1);
+
+        // Init cursor for X11
+        runSync("cupdatecursor", {cursorTheme, QString::number(cursorSize)});
+    }
 }
 
 void Application::initKWinConfig()
