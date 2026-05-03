@@ -1,7 +1,9 @@
 [Desktop Entry]
 Type=Application
-Exec=cutefish-session
-TryExec=cutefish-session
+Exec=/usr/bin/cutefish-session
+TryExec=/usr/bin/cutefish-session
 Name=Cutefish Desktop
-Keywords=session
-Comment=session
+Keywords=session;x11
+Comment=Cutefish X11 session
+DesktopNames=Cutefish
+X-GDM-SessionRegisters=true
