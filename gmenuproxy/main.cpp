@@ -13,6 +13,12 @@
 
 int main(int argc, char **argv)
 {
+    // gmenuproxy is X11-only, skip on Wayland
+    if (!qgetenv("WAYLAND_DISPLAY").isEmpty()) {
+        // Running on Wayland, exit gracefully
+        return 0;
+    }
+
     qputenv("QT_QPA_PLATFORM", "xcb");
 
     QGuiApplication::setDesktopSettingsAware(false);
@@ -20,7 +26,7 @@ int main(int argc, char **argv)
     QGuiApplication app(argc, argv);
 
     if (!KWindowSystem::isPlatformX11()) {
-        qFatal("qdbusmenuproxy is only useful XCB. Aborting");
+        qFatal("qdbusmenuproxy is only useful on X11. Aborting");
     }
 
     auto disableSessionManagement = [](QSessionManager &sm) {

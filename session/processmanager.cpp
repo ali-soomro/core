@@ -142,7 +142,10 @@ void ProcessManager::startDaemonProcess()
     QList<QPair<QString, QStringList>> list;
     list << qMakePair(QStringLiteral("cutefish-settings-daemon"), QStringList());
     // xembedsniproxy removed: on Wayland apps use StatusNotifierItem directly
-    list << qMakePair(QStringLiteral("cutefish-gmenuproxy"),      QStringList());
+    // gmenuproxy is X11-only, skip on Wayland
+    if (!m_app->wayland()) {
+        list << qMakePair(QStringLiteral("cutefish-gmenuproxy"), QStringList());
+    }
     list << qMakePair(QStringLiteral("chotkeys"),                  QStringList());
 
     for (const auto &pair : list) {
