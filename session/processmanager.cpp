@@ -69,7 +69,7 @@ void ProcessManager::logout()
 
 void ProcessManager::startWindowManager()
 {
-    const QString wm = m_app->wayland() ? QStringLiteral("kwin_wayland") : QStringLiteral("kwin_x11");
+    const QString wm = m_app->wayland() ? QStringLiteral("kwin_wayland") : QStringLiteral("kwin");
     QProcess *wmProcess = new QProcess(this);
     wmProcess->start(wm, {});
     m_systemProcess.insert(wm, wmProcess);

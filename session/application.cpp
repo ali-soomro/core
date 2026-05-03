@@ -93,6 +93,27 @@ Application::Application(int &argc, char **argv)
     QDBusConnection::sessionBus().registerService(QStringLiteral("com.cutefish.Session"));
     QDBusConnection::sessionBus().registerObject(QStringLiteral("/Session"), this);
 
+    // Register with GDM when X-GDM-SessionRegisters=true is set in session file
+    // GDM expects RegisterSession() to be called on the Manager interface
+    QDBusConnection systemBus = QDBusConnection::systemBus();
+    if (systemBus.isConnected()) {
+        QDBusMessage registerMsg = QDBusMessage::createMethodCall(
+            QStringLiteral("org.gnome.DisplayManager"),
+            QStringLiteral("/org/gnome/DisplayManager/Manager"),
+            QStringLiteral("org.gnome.DisplayManager.Manager"),
+            QStringLiteral("RegisterSession")
+        );
+        // RegisterSession takes no arguments in GDM's D-Bus API
+        QDBusMessage reply = systemBus.call(registerMsg);
+        if (reply.type() == QDBusMessage::ErrorMessage) {
+            qWarning() << "Failed to register with GDM:" << reply.errorMessage();
+        } else {
+            qDebug() << "Registered with GDM successfully";
+        }
+    } else {
+        qWarning() << "Cannot connect to system bus to register with GDM";
+    }
+
     QCommandLineParser parser;
     parser.setApplicationDescription(QStringLiteral("Cutefish Session"));
     parser.addHelpOption();
@@ -315,7 +336,7 @@ void Application::initKWinConfig()
     settings.setValue("Placement", "Centered");
     settings.endGroup();
 
-    settings.beginGroup("org.kde.kdecoration2");
+    settings.beginGroup("org.kde.kdecoration3");
     settings.setValue("BorderSize", "Normal");
     settings.setValue("ButtonsOnLeft", "");
     settings.setValue("ButtonsOnRight", "HIAX");
