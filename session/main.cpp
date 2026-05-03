@@ -24,8 +24,19 @@ int main(int argc, char *argv[])
 {
     // putenv((char *)"SESSION_MANAGER=");
 
+    // Check if wayland mode is requested (before creating QApplication)
+    bool wayland = false;
+    for (int i = 1; i < argc; ++i) {
+        if (strcmp(argv[i], "--wayland") == 0 || strcmp(argv[i], "-w") == 0) {
+            wayland = true;
+            break;
+        }
+    }
+
     // force xcb QPA plugin as session manager server is very X11 specific.
-    qputenv("QT_QPA_PLATFORM", QByteArrayLiteral("xcb"));
+    if (!wayland) {
+        qputenv("QT_QPA_PLATFORM", QByteArrayLiteral("xcb"));
+    }
 
     QQuickWindow::setDefaultAlphaBuffer(true);
     QCoreApplication::setAttribute(Qt::AA_DisableHighDpiScaling);
